@@ -2,7 +2,6 @@
 
 **by BetterCallS4V**
 
----
 
 ## The Story
 
@@ -21,7 +20,7 @@ I'm based in Ireland, and I didn't want to spend a fortune. Here's what I picked
 | Item | Spec | Cost |
 |---|---|---|
 | HP EliteDesk 800 G6 SFF (refurbished) | i5, 16GB RAM, 256GB SSD | €180 |
-| Lenovo ThinkPad T14 (refurbished) | i5 10th gen, 16GB RAM, 512GB SSD | already owned |
+| Lenovo ThinkPad T14 (refurbished) | i5 10th gen, 16GB RAM, 512GB SSD | €98|
 | MacBook M3 Pro | — | already owned |
 | TP-Link Router | basic home router | €18 |
 | Ethernet cable | because WiFi wasn't going to cut it | a few euro |
@@ -29,8 +28,7 @@ I'm based in Ireland, and I didn't want to spend a fortune. Here's what I picked
 
 > Nobody uses USB drives anymore apparently. Had to borrow one from a friend like it was 2009. No judgment.
 
-The HP EliteDesk is the server. The ThinkPad becomes the Kali attacker machine. The MacBook is the management console — basically just a browser pointed at Proxmox.
-
+The HP EliteDesk is the server. The ThinkPad becomes the Kali attacker machine. The MacBook is the management console .
 ---
 
 ## First Problem (Before Anything Even Started)
@@ -72,9 +70,9 @@ HP PC     ThinkPad    MacBook
 
 | Machine | Role | IP |
 |---|---|---|
-| Proxmox host | Hypervisor | 192.168.0.50 |
-| Windows Server 2022 | Domain Controller | 192.168.0.104 |
-| Ubuntu Server 24.04 | Wazuh SIEM | 192.168.0.105 |
+| Proxmox host | Hypervisor | 192.168.X.50 |
+| Windows Server 2022 | Domain Controller | 192.168.X.104 |
+| Ubuntu Server 24.04 | Wazuh SIEM | 192.168.X.105 |
 
 ---
 
@@ -110,13 +108,12 @@ Plugged the USB into the HP. Powered on. Tapped **F9** repeatedly to get the one
 
 Most of the installer is straightforward. The screen that actually matters is the **network configuration screen**.
 
-![Proxmox network config screen](images/proxmox-network-config.png)
 
 | Field | Value used |
 |---|---|
 | Hostname (FQDN) | `pve.lab.local` |
-| IP Address | `192.168.0.50/24` |
-| Gateway | `192.168.0.1` |
+| IP Address | `192.168.X.50/24` |
+| Gateway | `192.168.X.1` |
 | DNS Server | `8.8.8.8` |
 
 > Setting the wrong IP here caused a full reinstall. More on that in Phase 2.
@@ -128,12 +125,10 @@ Installation takes about 10 minutes. After reboot, the HP screen shows:
 ```
 Welcome to Proxmox Virtual Environment.
 Please use your web browser to configure this server — connect to:
-https://192.168.0.50:8006/
+https://192.168.X.50:8006/
 ```
 
 Opened that URL on the MacBook. Got a security warning about the certificate — that's normal for a self-signed cert, just click through it. Logged in with `root` and the password set during install.
-
-![Proxmox dashboard](images/proxmox-dashboard.png)
 
 ---
 
@@ -147,12 +142,12 @@ First attempt had the HP connected wirelessly. Proxmox's management interface **
 
 ### Problem 2 — Wrong IP range
 
-The Proxmox installer auto-detected the wrong network. It set the IP to `192.168.100.2` but the home network was actually `192.168.0.x`. Devices on different subnets cannot see each other, so every ping returned 100% packet loss.
+The Proxmox installer auto-detected the wrong network. It set the IP to `192.168.100.2` but the home network was actually `192.168.X.x`. Devices on different subnets cannot see each other, so every ping returned 100% packet loss.
 
 Diagnosed with:
 ```bash
-ping 192.168.100.2    # timeout
-arp -a                # confirmed MacBook was on 192.168.0.x
+ping 192.168.XXX.2    # timeout
+arp -a                # confirmed MacBook was on 192.168.X.x
 ```
 
 Fixed by logging into Proxmox directly and editing the network config:
@@ -163,20 +158,20 @@ nano /etc/network/interfaces
 
 Changed:
 ```
-address 192.168.100.2/24
-gateway 192.168.100.1
+address 192.168.X.2/24
+gateway 192.168.X.1
 ```
 To:
 ```
-address 192.168.0.50/24
-gateway 192.168.0.1
+address 192.168.X.50/24
+gateway 192.168.X.1
 ```
 
 Saved, rebooted. Finally reachable.
 
 ### Problem 3 — Multiple routers, multiple subnets
 
-The house already had a router but it was shared with other people. Bought a separate TP-Link for €18 and connected the HP via ethernet and the laptops via WiFi. Everything landed on the same `192.168.0.x` network and could communicate properly.
+The house already had a router but it was shared with other people. Bought a separate TP-Link for €18 and connected the HP via ethernet and the laptops via WiFi. Everything landed on the same `192.168.X.x` network and could communicate properly.
 
 ### The fix that actually worked
 
@@ -222,7 +217,6 @@ Selected **Windows Server 2022 Standard Evaluation (Desktop Experience)** — th
 
 Selected **Custom install**, let it partition the 50GB disk automatically, and left it running. Takes about 20 minutes.
 
-![Windows Server installer](images/windows-server-installer.png)
 
 ### Promoting to Domain Controller
 
@@ -240,8 +234,6 @@ Configured a new forest:
 | NetBIOS name | LAB |
 
 Server rebooted and came back showing **LAB\Administrator** at the login screen. Domain Controller live.
-
-![Windows Server Manager dashboard](images/windows-server-dashboard.png)
 
 ### Creating Domain Users
 
@@ -285,7 +277,6 @@ The Ubuntu installer is text-based. Key decisions during install:
 - Used default guided storage across the full 50GB disk
 - **Enabled OpenSSH server** — allows SSH access from the terminal, much more practical than using the Proxmox console every time
 
-![Ubuntu installer](images/ubuntu-installer.png)
 
 After reboot:
 
@@ -293,10 +284,8 @@ After reboot:
 Ubuntu 24.04.4 LTS
 System load:   0.0
 Memory usage:  5%
-IPv4 address:  192.168.0.105
+IPv4 address:  192.168.X.105
 ```
-
-![Ubuntu running](images/ubuntu-running.png)
 
 Wazuh installation is the next step and will be covered in Part 2 once internet access is configured on the VM.
 
